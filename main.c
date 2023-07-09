@@ -8,11 +8,12 @@ https://qiita.com/spc_ehara/items/03d179f4901faeadb184
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 // 画像の幅[ピクセル] 制約: 奇数
-#define WIDTH 51
+#define WIDTH 1001
 // 画像の高さ[ピクセル] 制約: 奇数
-#define HEIGHT 51
+#define HEIGHT 1001
 // ファイルヘッダのサイズ
 #define FILE_HEADER_SIZE 0x0e
 #define INFO_HEADER_SIZE 0x28
@@ -29,8 +30,8 @@ typedef struct pixel
 
 typedef struct point
 {
-    unsigned int X;
-    unsigned int Y;
+    double X;
+    double Y;
 } POINT;
 
 
@@ -41,6 +42,7 @@ void InitializeImageData(PIXEL *);
 void Plot(PIXEL *);
 void DrawLine(PIXEL *, POINT, POINT);
 void DrawAxis(PIXEL *);
+PIXEL *GetPixel(PIXEL *, POINT);
 
 /*BMP画像関連の関数群*/
 void ExportToBMP(PIXEL *);
@@ -52,11 +54,12 @@ int CalcFileSize();
 
 int main(void) 
 {
-    PIXEL imageData[HEIGHT][WIDTH];
-    PIXEL *imageDataFirst = &imageData[0][0];
-    InitializeImageData(imageDataFirst);
-    DrawAxis(imageDataFirst);
-    ExportToBMP(imageDataFirst);
+    PIXEL *imageData = (PIXEL *)calloc(HEIGHT * WIDTH, sizeof(PIXEL));
+    InitializeImageData(imageData);
+    DrawAxis(imageData);
+    Plot(imageData);
+    ExportToBMP(imageData);
+    free(imageData);
     return 0;
 }
 
@@ -97,7 +100,35 @@ void DrawLine(PIXEL *imageData, POINT p1, POINT p2)
 
 void Plot(PIXEL *imageData)
 {
-    
+    double x, y;
+    for (x = -(WIDTH - 1)/2; x < (WIDTH - 1)/2; x+=0.01) {
+        y = 100*sin(x/100);
+        POINT point;
+        point.X = x;
+        point.Y = y;
+        PIXEL *pixel = GetPixel(imageData, point);
+        if (pixel == NULL) {
+            continue;
+        }
+        pixel->R = 255;
+        pixel->G = 255;
+        pixel->B = 0;
+    }
+}
+
+// 与えられた点を表すピクセルを返します。もし存在していなければNULLを返します。
+PIXEL *GetPixel(PIXEL *imageData, POINT point) 
+{
+    // 指針：原点のインデクスを求めてから、引数pointの各座標を加算(yは-)し、それをもとにアドレスを計算する。
+    int originXIndex = (WIDTH - 1) / 2;
+    int originYIndex = (HEIGHT - 1) / 2;
+    int xIndex = round(originXIndex + point.X);
+    int yIndex = round(originYIndex - point.Y);
+    if (xIndex >= WIDTH || yIndex >= HEIGHT || xIndex < 0 || yIndex < 0) {
+        return NULL;
+    }
+
+    return imageData + xIndex + yIndex * WIDTH;
 }
 
 // 与えられた二次元データをもとに画像を出力します。
