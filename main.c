@@ -51,12 +51,13 @@ int main(void)
 void InitializeImageData(PIXEL *imageData) 
 {
     int i;
+    
     for (i = 0; i < HEIGHT * WIDTH; i++) {
-        PIXEL *pixel = (PIXEL *)malloc(sizeof(PIXEL));
-        pixel->R = 255;
-        pixel->G = 0;
-        pixel->B = 0;
-        *imageData = *pixel;
+        PIXEL pixel;
+        pixel.R = 0;
+        pixel.G = 0;
+        pixel.B = 0;
+        *imageData = pixel;
         imageData++;
     }
 }
@@ -68,13 +69,20 @@ void ExportToBMP(PIXEL *imageData)
     WriteBMPFileHeader(fp);
     WriteBMPInfoHeader(fp);
 
-    int i;
-    for (i = 0; i < HEIGHT * WIDTH; i++) {
-        fwrite(&imageData->B, 1, 1, fp);
-        fwrite(&imageData->G, 1, 1, fp);
-        fwrite(&imageData->R, 1, 1, fp);
-        imageData++;
+    
+    // BMP画像データは左下の画素から右上の画素に向かって格納されている
+    //   ∴  二重ループでポインタ演算をする必要がある
+    int i, j;
+    for (i = HEIGHT - 1; i >= 0; i--) {
+        for (j = 0; j < WIDTH; j++) {
+            // 二次元配列は、メモリ上では一次元のベクトルなので、先頭アドレス + i * 幅 * j
+            PIXEL *pixel = imageData + i * WIDTH + j;
+            fwrite(&pixel->B, 1, 1, fp);
+            fwrite(&pixel->G, 1, 1, fp);
+            fwrite(&pixel->R, 1, 1, fp);
+        }
     }
+
     fclose(fp);
 }
 
