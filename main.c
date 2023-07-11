@@ -8,6 +8,7 @@ https://qiita.com/spc_ehara/items/03d179f4901faeadb184
 
 #include <stdio.h>
 #include <stdlib.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
 
 // 画像の幅[ピクセル] 制約: 奇数
@@ -20,7 +21,12 @@ https://qiita.com/spc_ehara/items/03d179f4901faeadb184
 // ピクセル毎のビット数(今回はフルカラーなので24 = 0x18ビット)
 // 制約: 8の倍数
 #define BIT_PER_PIXEL 0x18
+// グラフの拡大率
+#define MAGNIFICATION 60
+// サンプリング数
+#define SAMPLING_RATE 1000
 
+// 画像の1ピクセルあたりの情報を表現する構造体
 typedef struct pixel
 {
     unsigned char R;
@@ -28,23 +34,37 @@ typedef struct pixel
     unsigned char B;
 } PIXEL;
 
+// 点を表現する構造体
 typedef struct point
 {
     double X;
     double Y;
+    int isContinue;
 } POINT;
 
-
-/*画像データ関連の関数群*/
+/* 画像データ関連の関数群 */
 void InitializeImageData(PIXEL *);
 
-/*グラフ生成関連の関数郡*/
-void Plot(PIXEL *);
-void DrawLine(PIXEL *, POINT, POINT);
-void DrawAxis(PIXEL *);
-PIXEL *GetPixel(PIXEL *, POINT);
+/* 画像データ生成関連の関数郡 */
+void Plot(PIXEL *imageData, POINT, PIXEL);
+void DrawLine(PIXEL *imageData, POINT, POINT);
+void DrawGraph(PIXEL *imageData, POINT (func)(double x, double nextX, int isInitial));
+void DrawAxis(PIXEL *imageData);
+POINT *GetPoints(POINT (func)(double x, double nextX, int isInitial));
+PIXEL *GetPixel(PIXEL *imageData, POINT);
 
-/*BMP画像関連の関数群*/
+/* 描画用計算関数郡 */
+void InitializeAAndB(double *a, double *b); // ユーティリティ関数
+/*
+double Polynomial(double x, int isInitial);
+*/
+POINT Tan(double x, double nextX, int isInitial);
+//POINT Cos(double x, double nextX, int isInitial);
+//POINT Sin(double x, double nextX, int isInitial);
+// 直線を結べるかの条件を判定する関数
+int CanDrawLineTan(double x1, double x2);
+
+/* BMP画像関連の関数群 */
 void ExportToBMP(PIXEL *);
 void WriteBMPFileHeader(FILE *);
 void WriteBMPInfoHeader(FILE *);
@@ -52,23 +72,28 @@ void WriteBMPImageData(FILE *, PIXEL *);
 int CalcImageSize();
 int CalcFileSize();
 
-int main(void) 
+int main(void)
 {
+    // ヒープ領域上に画像データを生成する。(auto変数はスタック領域に生成されるため)
     PIXEL *imageData = (PIXEL *)calloc(HEIGHT * WIDTH, sizeof(PIXEL));
     InitializeImageData(imageData);
     DrawAxis(imageData);
-    Plot(imageData);
+    //DrawGraph(imageData, Sin);
+    //DrawGraph(imageData, Sin);
+    //DrawGraph(imageData, Cos);
+    DrawGraph(imageData, Tan);
     ExportToBMP(imageData);
     free(imageData);
     return 0;
 }
 
 // 与えられた二次元配列をすべて0で埋めます。
-void InitializeImageData(PIXEL *imageData) 
+void InitializeImageData(PIXEL *imageData)
 {
     int i;
-    
-    for (i = 0; i < HEIGHT * WIDTH; i++) {
+
+    for (i = 0; i < HEIGHT * WIDTH; i++)
+    {
         PIXEL pixel;
         pixel.R = 0;
         pixel.G = 0;
@@ -78,61 +103,207 @@ void InitializeImageData(PIXEL *imageData)
     }
 }
 
-void DrawAxis(PIXEL *imageData) 
+// 座標軸を描画します。
+void DrawAxis(PIXEL *imageData)
 {
     int i;
     PIXEL pixel;
     pixel.R = 255;
     pixel.G = 0;
     pixel.B = 0;
-    for (i = 0; i < WIDTH; i++) {
-        *(imageData + (HEIGHT - 1)/2 * WIDTH + i) = pixel;
+    for (i = 0; i < WIDTH; i++)
+    {
+        *(imageData + (HEIGHT - 1) / 2 * WIDTH + i) = pixel;
     }
-    for (i = 0; i < HEIGHT; i++) {
-        *(imageData + (WIDTH - 1)/2 + HEIGHT * i) = pixel;
+    for (i = 0; i < HEIGHT; i++)
+    {
+        *(imageData + (WIDTH - 1) / 2 + HEIGHT * i) = pixel;
     }
 }
 
-void DrawLine(PIXEL *imageData, POINT p1, POINT p2) 
+// 与えられた2点p1, p2間の直線を描画します。
+void DrawLine(PIXEL *imageData, POINT p1, POINT p2)
 {
+    // 差を求める
+    int dx = p2.X - p1.X;
+    int dy = p2.Y - p1.Y;
 
-}
+    // 繰り返しの回数を決めるために、差の絶対値を取って比較する。
+    int dxAbs = abs(dx);
+    int dyAbs = abs(dy);
+    int count = dxAbs > dyAbs ? dxAbs : dyAbs;
+    
+    // 値が小さい方を代入する。
+    int x = p1.X > p2.X ? p2.X : p1.X;
+    int y = p1.Y > p2.Y ? p2.Y : p1.Y;
 
-void Plot(PIXEL *imageData)
-{
-    double x, y;
-    for (x = -(WIDTH - 1)/2; x < (WIDTH - 1)/2; x+=0.01) {
-        y = 100*sin(x/100);
+    int i;
+    for (i = 0; i < count; i++)
+    {
         POINT point;
-        point.X = x;
-        point.Y = y;
-        PIXEL *pixel = GetPixel(imageData, point);
-        if (pixel == NULL) {
-            continue;
+        if (dxAbs > dyAbs) {
+            point.X = x + i;
+            point.Y = (double)dy/(double)dx * (point.X - p1.X) + p1.Y;
+        } else {
+            point.Y = y + i;
+            point.X = (double)dx/(double)dy * (point.Y - p1.Y) + p1.X;
         }
-        pixel->R = 255;
-        pixel->G = 255;
-        pixel->B = 0;
+
+        PIXEL pixel = { 0, 255, 0 };
+        Plot(imageData, point, pixel);
     }
+}
+
+// 点を描画します。
+void Plot(PIXEL *imageData, POINT point, PIXEL color)
+{
+    PIXEL *pixel = GetPixel(imageData, point);
+    // 与えられた座標に対応するピクセルが存在場合はリターンする。
+    if (pixel == NULL)
+    {
+        return;
+    }
+    *pixel = color;
+}
+
+// 数学的な関数の役割をする関数と画像データを受け取り、描画します。
+void DrawGraph(PIXEL *imageData, POINT (func)(double x, double nextX, int isInitial))
+{
+    POINT *points = GetPoints(func);
+    // メモリ解放用に、先頭アドレスを記憶する。
+    POINT *start = points;
+    int i;
+    // サンプリング数 + 左右両側(画面外)の点の数
+    int count = SAMPLING_RATE + 2;
+    for (i = 0; i < count; i++) {
+        PIXEL pixel = { 255, 255, 0 };
+        if (i < count - 1 && points->isContinue) {
+            DrawLine(imageData, *points, *(points + 1));
+        }
+        Plot(imageData, *points, pixel);
+        points++;
+    }
+    // メモリを開放する。
+    free(start);
+}
+
+// 与えられた関数を用いて値を計算し、サンプリングレート+2個の座標配列を返します。(グラフが左右両側で途切れないようにするために、範囲外の点が２つ必要)
+// 注意：ヒープ領域上に配列を生成するので、必ずfree()でメモリを開放すること。
+POINT *GetPoints(POINT (func)(double x, double nextX, int isInitial)) 
+{
+    POINT *points = (POINT *)calloc(SAMPLING_RATE + 2, sizeof(POINT));
+    POINT *p = points;
+    double rate = WIDTH / (double)SAMPLING_RATE;
+    // 外の点も計算したいので、レートを加算している。
+    double XMax = (WIDTH - 1) / 2 + rate;
+    double XMin = -XMax; 
+    int i;
+    int isInitial = 1;
+    double x, nextX;
+    for (i = 0; i < SAMPLING_RATE + 2; i++) {
+        // x = Xの最小値 + 分割後一つ一つの幅 * i
+        x = (XMin + rate * i);
+        nextX = x + rate;
+
+        POINT point = func(x/MAGNIFICATION, nextX/MAGNIFICATION, isInitial);
+        // yも拡大する必要がある。
+        point.Y *= MAGNIFICATION;
+        point.X *= MAGNIFICATION;
+        *p = point;
+
+        if (i == 0) {
+            isInitial = 0;
+        }
+        p++;
+    }
+    return points;
 }
 
 // 与えられた点を表すピクセルを返します。もし存在していなければNULLを返します。
-PIXEL *GetPixel(PIXEL *imageData, POINT point) 
+PIXEL *GetPixel(PIXEL *imageData, POINT point)
 {
     // 指針：原点のインデクスを求めてから、引数pointの各座標を加算(yは-)し、それをもとにアドレスを計算する。
     int originXIndex = (WIDTH - 1) / 2;
     int originYIndex = (HEIGHT - 1) / 2;
-    int xIndex = round(originXIndex + point.X);
-    int yIndex = round(originYIndex - point.Y);
-    if (xIndex >= WIDTH || yIndex >= HEIGHT || xIndex < 0 || yIndex < 0) {
+    int xIndex = originXIndex + round(point.X);
+    int yIndex = originYIndex - round(point.Y);
+    if (xIndex >= WIDTH || yIndex >= HEIGHT || xIndex < 0 || yIndex < 0)
+    {
         return NULL;
     }
 
     return imageData + xIndex + yIndex * WIDTH;
 }
 
+
+double Sin(double x, int isInitial) {
+    static double a, b;
+    if (isInitial) {
+        printf("asin(bx)\n");
+        InitializeAAndB(&a, &b);
+    }
+    return a * sin(b * x);
+}
+
+double Cos(double x, int isInitial) {
+    static double a, b;
+    if (isInitial) {
+        printf("acos(bx)\n");
+        InitializeAAndB(&a, &b);
+    }
+    return a * cos(b * x);
+}
+
+POINT Tan(double x, double nextX, int isInitial) {
+    static double a, b;
+    if (isInitial) {
+        printf("atan(bx)\n");
+        InitializeAAndB(&a, &b);
+    }
+
+    double y = a * tan(b * x);
+    int isContinue = CanDrawLineTan(x, nextX);
+    POINT point = { x, y, isContinue };
+    return point;
+}
+
+int CanDrawLineTan(double x1, double x2) 
+{
+    x1 = fabs(x1);
+    x2 = fabs(x2);
+
+    double maxX, minX;
+    if (x1 > x2) {
+        maxX = x1;
+        minX = x2;
+    } else {
+        maxX = x2;
+        minX = x1;
+    }
+    
+    // minX <= d <= maxX のとき、dがpi/2で割り切れる かつ pi で割り切れないとき、直線を結べない。
+    // よって、閉区間[minX, maxX]内に、pi/2で割り切れる かつ pi で割り切れない実数dがあるかを調べる必要がある。
+    double pi2Mod = fmod(minX, M_PI_2);
+    double piMod = fmod(minX, M_PI);
+    // 最小のxがpi/2で割り切れ、piで割り切れない時は戻す。
+    if (pi2Mod == 0 && piMod != 0) { return 0; }
+    // 最小のx以上のpi/2の倍数、piの倍数を求める。
+    double d1 = minX + M_PI_2 - pi2Mod;
+    double d2 = minX + M_PI - piMod;
+    return round(d1) == round(d2) || d1 > maxX;
+}
+
+// 実数の定数a,bを初期化する。
+void InitializeAAndB(double *a, double *b) 
+{
+    printf("実数の定数a, bを初期化します。\na = ");
+    scanf("%lf", a);
+    printf("b = ");
+    scanf("%lf", b);
+}
+
 // 与えられた二次元データをもとに画像を出力します。
-void ExportToBMP(PIXEL *imageData) 
+void ExportToBMP(PIXEL *imageData)
 {
     FILE *fp = fopen("test.bmp", "wb");
     WriteBMPFileHeader(fp);
@@ -142,28 +313,28 @@ void ExportToBMP(PIXEL *imageData)
 }
 
 // BMP画像のファイルヘッダを書き込みます。
-void WriteBMPFileHeader(FILE *fp) 
+void WriteBMPFileHeader(FILE *fp)
 {
     // ファイルタイプ ("BM" = 0x42, 0x4d)
-    char fileType[] = { 0x42, 0x4d };
+    char fileType[] = {0x42, 0x4d};
     fwrite(fileType, 1, 2, fp);
 
     // ファイルサイズ, 予約領域(常に0), 画像データまでのオフセット
-    int header[] = { CalcFileSize(), 0, FILE_HEADER_SIZE + INFO_HEADER_SIZE };
+    int header[] = {CalcFileSize(), 0, FILE_HEADER_SIZE + INFO_HEADER_SIZE};
     fwrite(header, 4, 3, fp);
 }
 
 // BMP画像の情報ヘッダを書き込みます。
-void WriteBMPInfoHeader(FILE *fp) 
+void WriteBMPInfoHeader(FILE *fp)
 {
     // ヘッダサイズ(常に0x28)、幅、高さ[ピクセル]
-    int header0[] = { 0x28, WIDTH, HEIGHT };
+    int header0[] = {0x28, WIDTH, HEIGHT};
 
     // プレーン数(チャンネル数)(常に1)、ピクセル毎のビット数(今回はフルカラーなので24 = 0x18ビット)
-    short header1[] = { 1, 0x18 };
+    short header1[] = {1, 0x18};
 
     // 圧縮タイプ(無圧縮なので0)、イメージデータサイズ、水平解像度[ppm]、垂直解像度[ppm]、カラーインデックス数、重要インデックス
-    int header2[] = { 0, CalcImageSize(), 1, 1, 0, 0 };
+    int header2[] = {0, CalcImageSize(), 1, 1, 0, 0};
 
     fwrite(header0, 4, 3, fp);
     fwrite(header1, 2, 2, fp);
@@ -175,8 +346,10 @@ void WriteBMPImageData(FILE *fp, PIXEL *imageData)
     // BMP画像データは左下の画素から右上の画素に向かって格納されている
     //   ∴  二重ループでポインタ演算をする必要がある
     int i, j;
-    for (i = HEIGHT - 1; i >= 0; i--) {
-        for (j = 0; j < WIDTH; j++) {
+    for (i = HEIGHT - 1; i >= 0; i--)
+    {
+        for (j = 0; j < WIDTH; j++)
+        {
             // 二次元配列は、メモリ上では一次元のベクトルなので、先頭アドレス + i * 幅 * j
             PIXEL *pixel = imageData + i * WIDTH + j;
             fwrite(&pixel->B, 1, 1, fp);
@@ -193,7 +366,8 @@ void WriteBMPImageData(FILE *fp, PIXEL *imageData)
         // よって、不足分の計算は、4 - 99 * 3 % 4 = 1
         // 変数で一般化すると、　4 - 幅 * 1ピクセルあたりのバイト数 % 4
         int shortage = 4 - WIDTH * byte % 4;
-        if (shortage != 0) {
+        if (shortage != 0)
+        {
             char pad = 0;
             fwrite(&pad, 1, shortage, fp);
         }
@@ -201,7 +375,7 @@ void WriteBMPImageData(FILE *fp, PIXEL *imageData)
 }
 
 // 画像データそのもの(ヘッダなどを除く)のサイズ[バイト]を返します。
-int CalcImageSize() 
+int CalcImageSize()
 {
     // 幅 * 1ピクセルあたりのバイト数が4の倍数でない場合、4の倍数になるように0で埋まるので、サイズの計算が単純でない。
     // よって、幅 * 1ピクセルあたりのバイト数 + 幅 * 1ピクセルあたりのバイト数以上かつ最小の4の倍数までの差 * 高さ * バイト数
@@ -210,7 +384,7 @@ int CalcImageSize()
 }
 
 // 画像「ファイル」のサイズを返します。
-int CalcFileSize() 
+int CalcFileSize()
 {
     return FILE_HEADER_SIZE + INFO_HEADER_SIZE + CalcImageSize();
 }
