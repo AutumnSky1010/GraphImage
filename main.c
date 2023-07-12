@@ -22,7 +22,7 @@ https://qiita.com/spc_ehara/items/03d179f4901faeadb184
 // 制約: 8の倍数
 #define BIT_PER_PIXEL 0x18
 // グラフの拡大率
-#define MAGNIFICATION 5
+#define MAGNIFICATION 100
 // サンプリング数
 #define SAMPLING_RATE 1000
 
@@ -48,16 +48,15 @@ void InitializeImageData(PIXEL *);
 /* 画像データ生成関連の関数郡 */
 void Plot(PIXEL *imageData, POINT, PIXEL);
 void DrawLine(PIXEL *imageData, POINT, POINT, PIXEL pixel);
-void DrawGraph(PIXEL *imageData, POINT (func)(double x, double nextX, int isInitial));
+void DrawGraph(PIXEL *imageData, POINT(func)(double x, double nextX, int isInitial));
 void DrawAxis(PIXEL *imageData);
-POINT *GetPoints(POINT (func)(double x, double nextX, int isInitial));
+POINT *GetPoints(POINT(func)(double x, double nextX, int isInitial));
 PIXEL *GetPixel(PIXEL *imageData, POINT);
 
 /* 描画用計算関数郡 */
 void InitializeAAndB(double *a, double *b); // ユーティリティ関数
-/*
-double Polynomial(double x, int isInitial);
-*/
+
+POINT Polynomial(double x, double nextX, int isInitial);
 POINT Tan(double x, double nextX, int isInitial);
 POINT Cos(double x, double nextX, int isInitial);
 POINT Sin(double x, double nextX, int isInitial);
@@ -78,10 +77,11 @@ int main(void)
     PIXEL *imageData = (PIXEL *)calloc(HEIGHT * WIDTH, sizeof(PIXEL));
     InitializeImageData(imageData);
     DrawAxis(imageData);
-    //DrawGraph(imageData, Sin);
-    //DrawGraph(imageData, Sin);
-    //DrawGraph(imageData, Cos);
-    DrawGraph(imageData, Tan);
+    // DrawGraph(imageData, Sin);
+    // DrawGraph(imageData, Sin);
+    // DrawGraph(imageData, Cos);
+    // DrawGraph(imageData, Tan);
+    DrawGraph(imageData, Sin);
     ExportToBMP(imageData);
     free(imageData);
     return 0;
@@ -106,16 +106,16 @@ void InitializeImageData(PIXEL *imageData)
 // 座標軸を描画します。
 void DrawAxis(PIXEL *imageData)
 {
-    PIXEL pixel = { 255, 0, 0 };
+    PIXEL pixel = {255, 0, 0};
     double xMax = (WIDTH - 1) / 2;
     double yMax = (HEIGHT - 1) / 2;
 
-    POINT west = { -xMax, 0 };
-    POINT east = { xMax, 0 };
+    POINT west = {-xMax, 0};
+    POINT east = {xMax, 0};
     DrawLine(imageData, west, east, pixel);
 
-    POINT south = { 0, -yMax };
-    POINT north = { 0, yMax };
+    POINT south = {0, -yMax};
+    POINT north = {0, yMax};
     DrawLine(imageData, south, north, pixel);
 }
 
@@ -130,7 +130,7 @@ void DrawLine(PIXEL *imageData, POINT p1, POINT p2, PIXEL pixel)
     int dxAbs = abs(dx);
     int dyAbs = abs(dy);
     int count = dxAbs > dyAbs ? dxAbs : dyAbs;
-    
+
     // 値が小さい方を代入する。
     int x = p1.X > p2.X ? p2.X : p1.X;
     int y = p1.Y > p2.Y ? p2.Y : p1.Y;
@@ -139,12 +139,15 @@ void DrawLine(PIXEL *imageData, POINT p1, POINT p2, PIXEL pixel)
     for (i = 0; i < count; i++)
     {
         POINT point;
-        if (dxAbs > dyAbs) {
+        if (dxAbs > dyAbs)
+        {
             point.X = x + i;
-            point.Y = (double)dy/(double)dx * (point.X - p1.X) + p1.Y;
-        } else {
+            point.Y = (double)dy / (double)dx * (point.X - p1.X) + p1.Y;
+        }
+        else
+        {
             point.Y = y + i;
-            point.X = (double)dx/(double)dy * (point.Y - p1.Y) + p1.X;
+            point.X = (double)dx / (double)dy * (point.Y - p1.Y) + p1.X;
         }
 
         Plot(imageData, point, pixel);
@@ -164,7 +167,7 @@ void Plot(PIXEL *imageData, POINT point, PIXEL color)
 }
 
 // 数学的な関数の役割をする関数と画像データを受け取り、描画します。
-void DrawGraph(PIXEL *imageData, POINT (func)(double x, double nextX, int isInitial))
+void DrawGraph(PIXEL *imageData, POINT(func)(double x, double nextX, int isInitial))
 {
     POINT *points = GetPoints(func);
     // メモリ解放用に、先頭アドレスを記憶する。
@@ -172,10 +175,12 @@ void DrawGraph(PIXEL *imageData, POINT (func)(double x, double nextX, int isInit
     int i;
     // サンプリング数 + 左右両側(画面外)の点の数
     int count = SAMPLING_RATE + 2;
-    for (i = 0; i < count; i++) {
-        PIXEL pointPixel = { 255, 255, 0 };
-        PIXEL linePixel = { 0, 255, 0 };
-        if (i < count - 1 && points->isContinue) {
+    for (i = 0; i < count; i++)
+    {
+        PIXEL pointPixel = {255, 255, 0};
+        PIXEL linePixel = {0, 255, 0};
+        if (i < count - 1 && points->isContinue)
+        {
             DrawLine(imageData, *points, *(points + 1), linePixel);
         }
         Plot(imageData, *points, pointPixel);
@@ -187,29 +192,31 @@ void DrawGraph(PIXEL *imageData, POINT (func)(double x, double nextX, int isInit
 
 // 与えられた関数を用いて値を計算し、サンプリングレート+2個の座標配列を返します。(グラフが左右両側で途切れないようにするために、範囲外の点が２つ必要)
 // 注意：ヒープ領域上に配列を生成するので、必ずfree()でメモリを開放すること。
-POINT *GetPoints(POINT (func)(double x, double nextX, int isInitial)) 
+POINT *GetPoints(POINT(func)(double x, double nextX, int isInitial))
 {
     POINT *points = (POINT *)calloc(SAMPLING_RATE + 2, sizeof(POINT));
     POINT *p = points;
     double rate = WIDTH / (double)SAMPLING_RATE;
     // 外の点も計算したいので、レートを加算している。
     double XMax = (WIDTH - 1) / 2 + rate;
-    double XMin = -XMax; 
+    double XMin = -XMax;
     int i;
     int isInitial = 1;
     double x, nextX;
-    for (i = 0; i < SAMPLING_RATE + 2; i++) {
+    for (i = 0; i < SAMPLING_RATE + 2; i++)
+    {
         // x = Xの最小値 + 分割後一つ一つの幅 * i
         x = (XMin + rate * i);
         nextX = x + rate;
 
-        POINT point = func(x/MAGNIFICATION, nextX/MAGNIFICATION, isInitial);
+        POINT point = func(x / MAGNIFICATION, nextX / MAGNIFICATION, isInitial);
         // yも拡大する必要がある。
         point.Y *= MAGNIFICATION;
         point.X *= MAGNIFICATION;
         *p = point;
 
-        if (i == 0) {
+        if (i == 0)
+        {
             isInitial = 0;
         }
         p++;
@@ -233,21 +240,61 @@ PIXEL *GetPixel(PIXEL *imageData, POINT point)
     return imageData + xIndex + yIndex * WIDTH;
 }
 
+POINT Polynomial(double x, double nextX, int isInitial)
+{
+    static double coefficients[21];
+    static int n;
+    int i;
+    if (isInitial)
+    {
+        printf("n次の多項式 (0 <= n <= 20)\n");
+        printf("n = ");
+        scanf("%d", &n);
 
-POINT Sin(double x, double nextX, int isInitial) {
+        for (i = 0; i < n + 1; i++)
+        {
+            printf("x^%dの係数: ", i);
+            scanf("%lf", &coefficients[i]);
+        }
+    }
+
+    double y = coefficients[0];
+    // 定数だけじゃない場合
+    if (n != 0)
+    {
+        int j;
+        for (i = 1; i < n + 1; i++)
+        {
+            double unary = coefficients[i];
+            for (j = 0; j < i; j++)
+            {
+                unary *= x;
+            }
+            y += unary;
+        }
+    }
+    POINT point = { x, y, 1 };
+    return point;
+}
+
+POINT Sin(double x, double nextX, int isInitial)
+{
     static double a, b;
-    if (isInitial) {
+    if (isInitial)
+    {
         printf("asin(bx)\n");
         InitializeAAndB(&a, &b);
     }
-    double y = a * sin(b * x);
+    double y = a * sin(b * x * x);
     POINT point = {x, y, 1};
     return point;
 }
 
-POINT Cos(double x, double nextX, int isInitial) {
+POINT Cos(double x, double nextX, int isInitial)
+{
     static double a, b;
-    if (isInitial) {
+    if (isInitial)
+    {
         printf("acos(bx)\n");
         InitializeAAndB(&a, &b);
     }
@@ -256,48 +303,55 @@ POINT Cos(double x, double nextX, int isInitial) {
     return point;
 }
 
-POINT Tan(double x, double nextX, int isInitial) {
+POINT Tan(double x, double nextX, int isInitial)
+{
     static double a, b;
-    if (isInitial) {
+    if (isInitial)
+    {
         printf("atan(bx)\n");
         InitializeAAndB(&a, &b);
     }
 
     double y = a * tan(b * x);
     int isContinue = CanDrawLineTan(x, nextX, b);
-    POINT point = { x, y, isContinue };
+    POINT point = {x, y, isContinue};
     return point;
 }
 
-int CanDrawLineTan(double x1, double x2, double b) 
+int CanDrawLineTan(double x1, double x2, double b)
 {
-    
+
     x1 = fabs(x1);
     x2 = fabs(x2);
-    
+
     double maxX, minX;
-    if (x1 > x2) {
+    if (x1 > x2)
+    {
         maxX = x1;
         minX = x2;
-    } else {
+    }
+    else
+    {
         maxX = x2;
         minX = x1;
     }
-    
     // minX <= d <= maxX のとき、dが pi/2bで割り切れる かつ pi/b で割り切れないとき、直線を結べない。
     // よって、閉区間[minX, maxX]内に、pi/2bで割り切れる かつ pi/b で割り切れない実数dがあるかを調べる必要がある。
     double pi2Mod = fmod(minX, M_PI_2 / b);
     double piMod = fmod(minX, M_PI / b);
-    // 最小のxがpi/2で割り切れ、piで割り切れない時は戻す。
-    if (pi2Mod == 0 && piMod != 0) { return 0; }
+    // 最小のxがpi/2bで割り切れ、pi/bで割り切れない時は戻す。
+    if (pi2Mod == 0 && piMod != 0)
+    {
+        return 0;
+    }
     // 最小のx以上のpi/2の倍数、piの倍数を求める。
     double d1 = minX + M_PI_2 / b - pi2Mod;
     double d2 = minX + M_PI / b - piMod;
-    return round(d1) == round(d2) || d1 > maxX;
+    return d1 == d2 || d1 > maxX;
 }
 
 // 実数の定数a,bを初期化する。
-void InitializeAAndB(double *a, double *b) 
+void InitializeAAndB(double *a, double *b)
 {
     printf("実数の定数a, bを初期化します。\na = ");
     scanf("%lf", a);
