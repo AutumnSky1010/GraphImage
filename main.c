@@ -1,20 +1,44 @@
-/*
-
-【参考文献】
-BMPファイルの構造
-http://coconut.sys.eng.shizuoka.ac.jp/bmp/
-https://qiita.com/spc_ehara/items/03d179f4901faeadb184
-*/
+/**
+ *
+ *                グラフ描画ソフトウェア Ver 1.0.0-alpha
+ *
+ * 【概要】
+ * 与えられた関数のグラフをBMP画像として出力します。
+ *
+ * 【プロ2の範囲を超える内容】
+ * - ポインタ
+ *      - 関数ポインタなど
+ *      - 動的メモリ確保・開放(ヒープ領域・スタック領域・静的領域など)
+ * - 構造体
+ * - 各標準ライブラリ
+ * - プリプロセッサ
+ * - ファイル操作
+ *      - バイナリファイルの扱いなど
+ *
+ * 【ライセンス】
+ *  MIT
+ *
+ * 【参考文献】
+ * BMPファイルの構造
+ * - http://coconut.sys.eng.shizuoka.ac.jp/bmp/
+ * - https://qiita.com/spc_ehara/items/03d179f4901faeadb184
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <stdbool.h>
+#include <string.h>
 
 // 画像の幅[ピクセル] 制約: 奇数
 #define WIDTH 1001
 // 画像の高さ[ピクセル] 制約: 奇数
 #define HEIGHT 1001
+// 最大のy座標
+#define TOP (HEIGHT - 1) / 2
+// 最大のx座標
+#define RIGHT (WIDTH - 1) / 2
 // ファイルヘッダのサイズ
 #define FILE_HEADER_SIZE 0x0e
 #define INFO_HEADER_SIZE 0x28
@@ -22,67 +46,141 @@ https://qiita.com/spc_ehara/items/03d179f4901faeadb184
 // 制約: 8の倍数
 #define BIT_PER_PIXEL 0x18
 // グラフの拡大率
-#define MAGNIFICATION 100
+#define MAGNIFICATION 50
 // サンプリング数
 #define SAMPLING_RATE 1000
 
 // 画像の1ピクセルあたりの情報を表現する構造体
 typedef struct pixel
 {
+    // 赤成分
     unsigned char R;
+    // 緑成分
     unsigned char G;
+    // 青成分
     unsigned char B;
 } PIXEL;
 
 // 点を表現する構造体
 typedef struct point
 {
+    // x座標
     double X;
+    // y座標
     double Y;
-    int isContinue;
+    // 次の点と連続かを表す真偽値
+    bool IsContinue;
 } POINT;
 
-/* 画像データ関連の関数群 */
+// 数学的な関数の結果を表現する構造体
+typedef struct funcResult
+{
+    // y座標
+    double Y;
+    // 次の点と連続かを表す真偽値
+    bool IsContinue;
+} FUNC_RESULT;
+/* アプリケーションのライフサイクルに関する関数郡 */
+
+// 画像データを初期化する。
 void InitializeImageData(PIXEL *);
 
 /* 画像データ生成関連の関数郡 */
+// 点を描画する。
 void Plot(PIXEL *imageData, POINT, PIXEL);
+// 2点間を結ぶ直線を指定したピクセルで描画する。
 void DrawLine(PIXEL *imageData, POINT, POINT, PIXEL pixel);
-void DrawGraph(PIXEL *imageData, POINT(func)(double x, double nextX, int isInitial));
+// 与えられた関数のグラフを描画する。
+void DrawGraph(PIXEL *imageData, FUNC_RESULT(func)(double x, double nextX, int isInitial));
+// 座標軸を描画する。
 void DrawAxis(PIXEL *imageData);
-POINT *GetPoints(POINT(func)(double x, double nextX, int isInitial));
+// 与えられた関数を用いて、点の集合をつくり、その先頭アドレスを返す。
+POINT *GetPoints(FUNC_RESULT(func)(double x, double nextX, int isInitial));
+// 座標に対応する画像データのピクセルのポインタを返す。
 PIXEL *GetPixel(PIXEL *imageData, POINT);
 
-/* 描画用計算関数郡 */
-void InitializeAAndB(double *a, double *b); // ユーティリティ関数
-
-POINT Polynomial(double x, double nextX, int isInitial);
-POINT Tan(double x, double nextX, int isInitial);
-POINT Cos(double x, double nextX, int isInitial);
-POINT Sin(double x, double nextX, int isInitial);
-// 直線を結べるかの条件を判定する関数
-int CanDrawLineTan(double x1, double x2, double b);
+/* 数学的な関数を計算する関数郡 */
+// 実数a, bを初期化する。
+void InitializeAAndBAndC(double *a, double *b, double *c); // ユーティリティ関数
+// 多項式関数
+FUNC_RESULT Polynomial(double x, double nextX, int isInitial);
+// 正接
+FUNC_RESULT Tan(double x, double nextX, int isInitial);
+// 余弦
+FUNC_RESULT Cos(double x, double nextX, int isInitial);
+// 正弦
+FUNC_RESULT Sin(double x, double nextX, int isInitial);
+// tan(x)における、直線を結べるかの条件を判定する関数
+bool CanDrawLineTan(double x1, double x2, double b);
 
 /* BMP画像関連の関数群 */
-void ExportToBMP(PIXEL *);
+// 画像データをBMP画像として出力する関数。
+void ExportToBMP(PIXEL *imageData, char *fileName);
+// BMP画像のファイルヘッダをファイルに書き込む。
 void WriteBMPFileHeader(FILE *);
+// BMP画像の情報ヘッダをファイルに書き込む。
 void WriteBMPInfoHeader(FILE *);
-void WriteBMPImageData(FILE *, PIXEL *);
+// BMP画像の画像データをファイルに書き込む。
+void WriteBMPImageData(FILE *, PIXEL *imageData);
+// 画像データのサイズ[バイト]を計算する関数。
 int CalcImageSize();
+// ファイルのサイズを計算する関数。
 int CalcFileSize();
 
 int main(void)
 {
+    // 数学的な関数の配列
+    FUNC_RESULT(*funcs[4])
+    (double x, double nextX, int isInitial) = {
+        Polynomial,
+        Sin,
+        Cos,
+        Tan};
     // ヒープ領域上に画像データを生成する。(auto変数はスタック領域に生成されるため)
     PIXEL *imageData = (PIXEL *)calloc(HEIGHT * WIDTH, sizeof(PIXEL));
-    InitializeImageData(imageData);
-    DrawAxis(imageData);
-    // DrawGraph(imageData, Sin);
-    // DrawGraph(imageData, Sin);
-    // DrawGraph(imageData, Cos);
-    // DrawGraph(imageData, Tan);
-    DrawGraph(imageData, Sin);
-    ExportToBMP(imageData);
+
+    printf("グラフ画像出力ソフトウェア\n");
+    bool isAppEnd = false;
+    do
+    {
+        InitializeImageData(imageData);
+        DrawAxis(imageData);
+        
+        char fileName[51];
+        do 
+        {
+            printf("ファイル名を入力してください。(20字以内)\n");
+            scanf("%s", fileName);
+        } while(strlen(fileName) > 20);
+
+        int input;
+        bool isInputFuncsEnd = false;
+        do
+        {
+            printf("描画したい関数を選び、番号を入力してください。\n存在しない番号を入力すると、終了します。\n");
+            printf("多項式関数: 0\nsin x: 1\ncos x: 2\ntan x: 3\n");
+            scanf("%d", &input);
+            if (0 <= input && input <= 3)
+            {
+                DrawGraph(imageData, funcs[input]);
+            }
+            else
+            {
+                isInputFuncsEnd = true;
+            }
+            printf("\n");
+        } while (!isInputFuncsEnd);
+        ExportToBMP(imageData, fileName);
+        printf("%sを出力しました。\n", fileName);
+        printf("終了する場合: 0\n別の画像を出力する場合: 0以外\nを入力してください。\n");
+        scanf("%d", &input);
+        if (input == 0)
+        {
+            isAppEnd = true;
+        }
+
+    } while (!isAppEnd);
+
     free(imageData);
     return 0;
 }
@@ -102,6 +200,15 @@ void InitializeImageData(PIXEL *imageData)
         imageData++;
     }
 }
+
+/**
+ * ==================================================================
+ *
+ * 以下、グラフデータ生成関連の関数群(できることなら別ファイルにしたい)
+ * 画像データをを直接書き込む。
+ *
+ * ==================================================================
+ */
 
 // 座標軸を描画します。
 void DrawAxis(PIXEL *imageData)
@@ -129,11 +236,31 @@ void DrawLine(PIXEL *imageData, POINT p1, POINT p2, PIXEL pixel)
     // 繰り返しの回数を決めるために、差の絶対値を取って比較する。
     int dxAbs = abs(dx);
     int dyAbs = abs(dy);
-    int count = dxAbs > dyAbs ? dxAbs : dyAbs;
-
-    // 値が小さい方を代入する。
+    int count;
+    // 値を代入していく最小の座標。2点で値が小さい方を代入する。
     int x = p1.X > p2.X ? p2.X : p1.X;
     int y = p1.Y > p2.Y ? p2.Y : p1.Y;
+    // xの増加量とyの増加量を比較し、増加量が多い方を繰り返し回数とする。
+    if (dxAbs > dyAbs)
+    {
+        count = dxAbs;
+        // もし、始点のx座標が負の画面外の場合、始点を画面内にする。
+        if (x < -RIGHT)
+        {
+            count -= abs(x  + RIGHT);
+            x = -RIGHT;
+        }
+    }
+    else
+    {
+        count = dyAbs;
+        // もし、始点のy座標が負の画面外の場合、始点を画面内にする。
+        if (y < -TOP)
+        {
+            count -= abs(y  + TOP);
+            y = -TOP;
+        }
+    }
 
     int i;
     for (i = 0; i < count; i++)
@@ -143,11 +270,21 @@ void DrawLine(PIXEL *imageData, POINT p1, POINT p2, PIXEL pixel)
         {
             point.X = x + i;
             point.Y = (double)dy / (double)dx * (point.X - p1.X) + p1.Y;
+            // 線が画面外に達した場合は処理を打ち切る
+            if (point.X > RIGHT || point.X < -RIGHT)
+            {
+                break;
+            }
         }
         else
         {
             point.Y = y + i;
             point.X = (double)dx / (double)dy * (point.Y - p1.Y) + p1.X;
+            // 線が画面外に達した場合は処理を打ち切る
+            if (point.Y > TOP || point.Y < -TOP)
+            {
+                break;
+            }
         }
 
         Plot(imageData, point, pixel);
@@ -167,7 +304,7 @@ void Plot(PIXEL *imageData, POINT point, PIXEL color)
 }
 
 // 数学的な関数の役割をする関数と画像データを受け取り、描画します。
-void DrawGraph(PIXEL *imageData, POINT(func)(double x, double nextX, int isInitial))
+void DrawGraph(PIXEL *imageData, FUNC_RESULT(func)(double x, double nextX, int isInitial))
 {
     POINT *points = GetPoints(func);
     // メモリ解放用に、先頭アドレスを記憶する。
@@ -175,11 +312,12 @@ void DrawGraph(PIXEL *imageData, POINT(func)(double x, double nextX, int isIniti
     int i;
     // サンプリング数 + 左右両側(画面外)の点の数
     int count = SAMPLING_RATE + 2;
+    PIXEL pointPixel = {255, 255, 0};
+    PIXEL linePixel = {0, 255, 0};
     for (i = 0; i < count; i++)
     {
-        PIXEL pointPixel = {255, 255, 0};
-        PIXEL linePixel = {0, 255, 0};
-        if (i < count - 1 && points->isContinue)
+
+        if (i < count - 1 && points->IsContinue)
         {
             DrawLine(imageData, *points, *(points + 1), linePixel);
         }
@@ -191,14 +329,16 @@ void DrawGraph(PIXEL *imageData, POINT(func)(double x, double nextX, int isIniti
 }
 
 // 与えられた関数を用いて値を計算し、サンプリングレート+2個の座標配列を返します。(グラフが左右両側で途切れないようにするために、範囲外の点が２つ必要)
-// 注意：ヒープ領域上に配列を生成するので、必ずfree()でメモリを開放すること。
-POINT *GetPoints(POINT(func)(double x, double nextX, int isInitial))
+// 注意：ヒープ領域上に配列を生成するので、使用後は必ずfree()でメモリを開放すること。
+POINT *GetPoints(FUNC_RESULT(func)(double x, double nextX, int isInitial))
 {
     POINT *points = (POINT *)calloc(SAMPLING_RATE + 2, sizeof(POINT));
+    // 戻り値は先頭アドレスにしたいので、作業用ポインタ変数を生成している。
     POINT *p = points;
+    // 幅をレートで分割する
     double rate = WIDTH / (double)SAMPLING_RATE;
     // 外の点も計算したいので、レートを加算している。
-    double XMax = (WIDTH - 1) / 2 + rate;
+    double XMax = RIGHT + rate;
     double XMin = -XMax;
     int i;
     int isInitial = 1;
@@ -209,12 +349,15 @@ POINT *GetPoints(POINT(func)(double x, double nextX, int isInitial))
         x = (XMin + rate * i);
         nextX = x + rate;
 
-        POINT point = func(x / MAGNIFICATION, nextX / MAGNIFICATION, isInitial);
-        // yも拡大する必要がある。
-        point.Y *= MAGNIFICATION;
-        point.X *= MAGNIFICATION;
+        // xには、拡大率^-1を乗ずる必要がある。
+        // y = f(x)をx軸方向、y軸方向にn倍拡大するには、
+        // y = nf(x/n)として計算する必要があるから。
+        FUNC_RESULT result = func(x / MAGNIFICATION, nextX / MAGNIFICATION, isInitial);
+        // 描画用に拡大して座標を保存する。描画時のx座標は拡大率をかけていない状態である必要がある。(あくまで、yの計算時の話だから)
+        POINT point = {x, result.Y * MAGNIFICATION, result.IsContinue};
         *p = point;
 
+        // i = 0のとき、関数を初期化済みなので、isInitialを0にする。
         if (i == 0)
         {
             isInitial = 0;
@@ -240,9 +383,21 @@ PIXEL *GetPixel(PIXEL *imageData, POINT point)
     return imageData + xIndex + yIndex * WIDTH;
 }
 
-POINT Polynomial(double x, double nextX, int isInitial)
+/**
+ * ==================================================================
+ *
+ * 以下、数学的な関数を計算する関数群(できることなら別ファイルにしたい)
+ *
+ * ==================================================================
+ */
+
+// 多項式関数
+FUNC_RESULT Polynomial(double x, double nextX, int isInitial)
 {
+    // 昇べきの順で各項の係数を持つ配列。ax^0 + bx^1 + ...... + tx^20
+    // とりあえず20次式まで対応している。
     static double coefficients[21];
+    // n次式のn
     static int n;
     int i;
     if (isInitial)
@@ -257,15 +412,20 @@ POINT Polynomial(double x, double nextX, int isInitial)
             scanf("%lf", &coefficients[i]);
         }
     }
-
+    // x^0の係数(定数項)を代入
     double y = coefficients[0];
-    // 定数だけじゃない場合
-    if (n != 0)
+    // 定数だけじゃないかつ、xが0じゃない場合
+    if (n != 0 && x != 0)
     {
         int j;
         for (i = 1; i < n + 1; i++)
         {
+            // 単項の値を保持する。
             double unary = coefficients[i];
+            if (unary == 0)
+            {
+                continue;
+            }
             for (j = 0; j < i; j++)
             {
                 unary *= x;
@@ -273,54 +433,58 @@ POINT Polynomial(double x, double nextX, int isInitial)
             y += unary;
         }
     }
-    POINT point = { x, y, 1 };
-    return point;
+    FUNC_RESULT result = {y, true};
+    return result;
 }
 
-POINT Sin(double x, double nextX, int isInitial)
+// 正弦
+FUNC_RESULT Sin(double x, double nextX, int isInitial)
 {
-    static double a, b;
+    static double a, b, c;
     if (isInitial)
     {
-        printf("asin(bx)\n");
-        InitializeAAndB(&a, &b);
+        printf("asin(bx) + c\n");
+        InitializeAAndBAndC(&a, &b, &c);
     }
-    double y = a * sin(b * x * x);
-    POINT point = {x, y, 1};
-    return point;
+    double y = a * sin(b * x) + c;
+    FUNC_RESULT result = {y, true};
+    return result;
 }
 
-POINT Cos(double x, double nextX, int isInitial)
+// 余弦
+FUNC_RESULT Cos(double x, double nextX, int isInitial)
 {
-    static double a, b;
+    static double a, b, c;
     if (isInitial)
     {
-        printf("acos(bx)\n");
-        InitializeAAndB(&a, &b);
+        printf("acos(bx) + c\n");
+        InitializeAAndBAndC(&a, &b, &c);
     }
-    double y = a * cos(b * x);
-    POINT point = {x, y, 1};
-    return point;
+    double y = a * cos(b * x) + c;
+    FUNC_RESULT result = {y, true};
+    return result;
 }
 
-POINT Tan(double x, double nextX, int isInitial)
+// 正接
+FUNC_RESULT Tan(double x, double nextX, int isInitial)
 {
-    static double a, b;
+    static double a, b, c;
     if (isInitial)
     {
-        printf("atan(bx)\n");
-        InitializeAAndB(&a, &b);
+        printf("atan(bx) + c\n");
+        InitializeAAndBAndC(&a, &b, &c);
     }
 
-    double y = a * tan(b * x);
+    double y = a * tan(b * x) + c;
     int isContinue = CanDrawLineTan(x, nextX, b);
-    POINT point = {x, y, isContinue};
-    return point;
+    FUNC_RESULT result = {y, isContinue};
+    return result;
 }
 
-int CanDrawLineTan(double x1, double x2, double b)
+// tan(x)用の、2点間で直線を引けるかを判定する関数。
+bool CanDrawLineTan(double x1, double x2, double b)
 {
-
+    // 絶対値をとる
     x1 = fabs(x1);
     x2 = fabs(x2);
 
@@ -351,18 +515,29 @@ int CanDrawLineTan(double x1, double x2, double b)
 }
 
 // 実数の定数a,bを初期化する。
-void InitializeAAndB(double *a, double *b)
+void InitializeAAndBAndC(double *a, double *b, double *c)
 {
-    printf("実数の定数a, bを初期化します。\na = ");
+    printf("実数の定数a, b, cを初期化します。\na = ");
     scanf("%lf", a);
     printf("b = ");
     scanf("%lf", b);
+    printf("c = ");
+    scanf("%lf", c);
 }
 
+/**
+ * ==================================================================
+ *
+ * 以下、BMP画像関連の関数群(できることなら別ファイルにしたい)
+ *
+ * ==================================================================
+ */
+
 // 与えられた二次元データをもとに画像を出力します。
-void ExportToBMP(PIXEL *imageData)
+void ExportToBMP(PIXEL *imageData, char *fileName)
 {
-    FILE *fp = fopen("test.bmp", "wb");
+    strcat(fileName, ".bmp");
+    FILE *fp = fopen(fileName, "wb");
     WriteBMPFileHeader(fp);
     WriteBMPInfoHeader(fp);
     WriteBMPImageData(fp, imageData);
