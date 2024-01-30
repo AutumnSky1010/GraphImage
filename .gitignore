@@ -1,0 +1,6 @@
+main.exe
+.vscode/launch.json
+.vscode/*.json
+*.bmp
+*.exe
+.vscode/c_cpp_properties.json
