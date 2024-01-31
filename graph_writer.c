@@ -28,10 +28,14 @@
 #define WIDTH 1001
 // 画像の高さ[ピクセル] 制約: 奇数
 #define HEIGHT 1001
+// グラフの拡大率
+#define MAGNIFICATION 100
+// サンプリング数
+#define SAMPLING_RATE 1001
 // グラフ画像の中心X
-#define CENTER_X 450
+#define CENTER_X 0 * MAGNIFICATION
 // グラフ画像の中心Y
-#define CENTER_Y 0
+#define CENTER_Y 0 * MAGNIFICATION
 // 最大のy座標
 #define TOP (HEIGHT - 1) / 2 + CENTER_Y
 // 最小のy座標
@@ -47,10 +51,6 @@
 // ピクセル毎のビット数(今回はフルカラーなので24 = 0x18ビット)
 // 制約: 8の倍数
 #define BIT_PER_PIXEL 0x18
-// グラフの拡大率
-#define MAGNIFICATION 150
-// サンプリング数
-#define SAMPLING_RATE 1000
 
 // 点を表現する構造体
 typedef struct point

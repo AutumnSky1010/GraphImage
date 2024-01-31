@@ -100,13 +100,13 @@ double newton_method()
 
         xk = xk - f(xk, f_node) / dxdy(xk, dxdy_node);
         draw_graph_func(graph_image, color, nodes_for_tangent_line, tangent_line);
-        printf("%d反復: %.16f\n", i + 1, xk);
+        printf("[繰り返し%d回目]\n近似解: %.16f\n", i + 1, xk);
         char fileName[51];
         sprintf(fileName, "%s/%d-%s", "newton_method_images", i + 1, "newton_method");
         export_to_bmp(graph_image, fileName);
         if (fabs(f(xk, f_node)) < eps)
         {
-            printf("%d反復で近似解: %.16f\n", i + 1, xk);
+            printf("%d反復で近似解: %.16fが求まりました。\n", i + 1, xk);
             return xk;
         }
     }
@@ -157,13 +157,14 @@ void draw_graph()
     while (fscanf(fp, "%s %hhu %hhu %hhu", expression, &color.R, &color.G, &color.B) != EOF)
     {
         draw_graph_expression(graph_image, color, expression);
+        color.R = 0;
+        color.G = 0;
+        color.B = 0;
     }
 
     export_to_bmp(graph_image, file_name);
 
     printf("%sを出力しました。\n", file_name);
-    getchar();
-    getchar();
     dispose_image(graph_image);
     free(file_name);
 
