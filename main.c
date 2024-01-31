@@ -18,13 +18,15 @@ typedef enum mode
 void draw_graph();
 
 // ニュートン法を実行してグラフを出力する
-double newton_method();
+void newton_method();
 // 関数
 double f(double x, Node *node);
 // 微分係数を計算する
 double dxdy(double x, Node *node);
 // 接線の式
 double tangent_line(double x, Node *node);
+// 接線を描画して保存する
+void write_tangent_line(Pixel *graph_image, Node *nodes_for_tangent_line, int count);
 
 int main(void)
 {
@@ -51,7 +53,7 @@ int main(void)
 // 接線の方程式を計算するためににグローバル変数にしている。
 double xk;
 
-double newton_method()
+void newton_method()
 {
     // ファイルから初期値、関数、導関数を読み込む
     char *function_file_name = "newton_funcs.txt";
@@ -94,23 +96,18 @@ double newton_method()
     srand(time(NULL));
     for (i = 0; i < MAX_ITER_COUNT; i++)
     {
-        color.R = rand() % 256;
-        color.G = rand() % 256;
-        color.B = rand() % 256;
-
+        write_tangent_line(graph_image, nodes_for_tangent_line, i);
         xk = xk - f(xk, f_node) / dxdy(xk, dxdy_node);
-        draw_graph_func(graph_image, color, nodes_for_tangent_line, tangent_line);
         printf("[繰り返し%d回目]\n近似解: %.16f\n", i + 1, xk);
-        char fileName[51];
-        sprintf(fileName, "%s/%d-%s", "newton_method_images", i + 1, "newton_method");
-        export_to_bmp(graph_image, fileName);
         if (fabs(f(xk, f_node)) < eps)
         {
             printf("%d反復で近似解: %.16fが求まりました。\n", i + 1, xk);
-            return xk;
+            write_tangent_line(graph_image, nodes_for_tangent_line, i + 1);
+            return;
         }
     }
     printf("%d反復では収束しませんでした。\n", MAX_ITER_COUNT);
+    write_tangent_line(graph_image, nodes_for_tangent_line, MAX_ITER_COUNT);
 }
 
 double dxdy(double x, Node *node)
@@ -128,6 +125,18 @@ double f(double x, Node *node)
 double tangent_line(double x, Node *node)
 {
     return dxdy(xk, node + 1) * (x - xk) + f(xk, node);
+}
+
+void write_tangent_line(Pixel *graph_image, Node *nodes_for_tangent_line, int count)
+{
+    char fileName[51];
+    Pixel color;
+    color.R = rand() % 256;
+    color.G = rand() % 256;
+    color.B = rand() % 256;
+    draw_graph_func(graph_image, color, nodes_for_tangent_line, tangent_line);
+    sprintf(fileName, "%s/%d-%s", "newton_method_images", count, "newton_method");
+    export_to_bmp(graph_image, fileName);
 }
 
 void draw_graph()
