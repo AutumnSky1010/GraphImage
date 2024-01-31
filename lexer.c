@@ -23,7 +23,7 @@ Token *lexical(char *expression)
     // トークンのリスト(ダミーノードで初期化)
     Token *token_list = (Token *)calloc(1, sizeof(Token));
     Token *token_start = token_list;
-    token_list->data = "";
+    token_list->data = NULL;
     token_list->next = NULL;
     token_list->prev = NULL;
     bool is_during_other_str = false;
@@ -242,7 +242,10 @@ void dispose_all_tokens(Token *root)
 }
 void dispose_token(Token *token)
 {
-    free(token->data);
+    if (token->data != NULL)
+    {
+        free(token->data);
+    }
     free(token);
 }
 

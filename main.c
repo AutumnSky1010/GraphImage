@@ -29,9 +29,11 @@ double tangent_line(double x, Node *node);
 int main(void)
 {
     Mode mode;
+    int mode_input;
     printf("グラフ描画&ニュートン法シミュレータ\n");
     printf("モードを選んでください。\n%d: ニュートン法シミュレータ\n%d: 関数グラフ描画\n", newton, draw_graph_mode);
-    scanf("%d", &mode);
+    scanf("%d", &mode_input);
+    mode = (Mode)mode_input;
     switch (mode)
     {
     case newton:
@@ -152,7 +154,7 @@ void draw_graph()
 
     Pixel *graph_image = init_graph_image();
     draw_axis(graph_image);
-    while (fscanf(fp, "%s %d %d %d", expression, &color.R, &color.G, &color.B) != EOF)
+    while (fscanf(fp, "%s %hhu %hhu %hhu", expression, &color.R, &color.G, &color.B) != EOF)
     {
         draw_graph_expression(graph_image, color, expression);
     }
